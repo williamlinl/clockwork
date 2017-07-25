@@ -1,0 +1,54 @@
+\section{System Implementation} \label{sec:implementation}
+
+In this section, we first discuss implementation issues regarding the computation of rate allocation on the cloud servers. Then, we address the problem of request scheduling on user devices.
+
+
+\subsection{Rate Computation on Cloud Servers}
+
+\subsubsection{User Synchronization}
+
+In our implementation, we set the number of time slots within a minute as $T = 4$, i.e., users report their request information to cloud servers of Clockwork and obtain the allocated rate every $15$ seconds. Three kinds of HTTP requests are used for users to communicate with cloud servers. The first kind of HTTP requests are sent when users launch the application or restart the application from background. The cloud servers will reply with an initial rate $R_0$ and the synchronization reference. $R_0$ is above zero, since we find that upon logging in, users tend to perform many operations, thus sending many requests. If $R_0=0$, these requests can not be sent until a new rate is assigned at the next time slot, which may lead to a poor user experience.
+ 
+
+The second kind of HTTP requests are used to periodically report users' request information and ask for rate allocation. The cloud servers maintain a table of all active users, including the user ID, number of requests $\pmb{X}(\tau)$, weight $\pmb{\omega}(\tau)$, and the rate allocation result $\pmb{R}(\tau)$. Users log in at different times, and the local time on their mobile devices may be different from the time on cloud servers. We need to synchronize users to ensure that they update $\pmb{X}(\tau)$ and $\pmb{\omega}(\tau)$ at (almost) the same time for cloud servers to compute the rate allocation $\pmb{R}(\tau)$. Recall that the response to the first kind of HTTP requests upon user arrival includes a synchronization reference. We use the \emph{second} of the server time as this synchronization reference. For example, if a new user arrives at \formattime{00}{00}{43} of the server time, the synchronization reference will be $43$, which is then fed into a (one-time) \emph{timer} function on the user device. The function will be executed after $15-(43\mod 15) = 2$ seconds, i.e., at \formattime{00}{00}{45} of the server time, triggering another (iterative) \emph{timer} function that will communicate with the cloud servers every $15$ seconds. In this way, all users will be synchronized to report their request information at the start of each time slot.
+
+The last kind of HTTP requests are used to inform the cloud servers that the application goes to background or is terminated, so that the user will be removed from the rate allocation table. 
+
+If a user's HTTP requests fail, the application will get an error message. In this case, without allocated rate from the cloud servers, the user device will carry out a default request scheduling mechanism, which we will describe in Section \ref{sec:default}). Meanwhile, the user will keep trying to contact the cloud servers every $15$ seconds.   
+
+\subsubsection{Rate Allocation Computation}\label{sec:rate}
+
+We classify all requests into $K = 3$ types: type $3$ requests are the most urgent, and type $1$ requests are the least urgent. Then we define that the weight of a user is the sum of types of all her requests. For example, if user $s$ has 15 type 1 requests, 10 type 2 requests, and 5 type 3 requests, her weight is $\omega_s(\tau) = 15*1+10*2+5*3 = 50$.  It can be easily checked that a user with more urgent requests will get a higher weight.
+
+Since users will turn up for new rates at the start of time slot $\tau+1$, the cloud servers need to calculate the rate allocation result $\pmb{R}(\tau+1)$ before the end of time slot $\tau$, by which the reports on $\pmb{X}(\tau)$ and $\pmb{\omega}(\tau)$ haven't been submitted yet. One option is for the cloud servers to wait for $\pmb{X}(\tau)$ and $\pmb{\omega}(\tau)$ at the beginning of time slot $\tau+1$, and then compute $\pmb{R}(\tau+1)$ accordingly. However, users' HTTP requests will not arrive at exactly the same time, due to different network conditions. Early users may have to wait an undesirably long time for all other users to report their information, after which the new rate allocation can be calculated. To avoid this situation, we decide that the cloud servers will work out the new rate allocation $\pmb{R}(\tau+1)$ $5$ seconds before the end of each time slot, using the available information $\pmb{X}(\tau-1)$ and $\pmb{\omega}(\tau-1)$. 
+
+
+\subsubsection{Request Cap Adjustment}      
+
+When computing rate allocation for each time slot, we assume that the cap on the number of requests to be sent is $N/T$, in which $N$ is the backend capacity, and $T$ is the number of time slots within a minute. However, as some of the allocated rates may be unused (as $X_s(\tau) < R_s(\tau)$), we can adjust the cap to make a better use of the backend capacity. At the first time slot of each minute, the cap will be $N/T$; at the following time slots, the cap will be $N/T$ plus the remaining rates from the previous time slot. For example, if the backend capacity is $1800$, and each minute is divided into $T=4$ time slots. At time slot $1$, the request cap is $1800/4 = 450$. If the actual number of requests sent to the backend during time slot $1$ is $430$, the request cap at time slot $2$ will be $450+(450-430) = 470$.
+
+ 
+
+\subsection{Request Scheduling on User Devices}\label{sec:sending}
+
+\subsubsection{Dynamic Request Scheduling}
+The user device will keep a queue of requests ranked in a non-ascending order of priorities that are jointly determined by the type and the initiation time of a request. A new request will be inserted into the queue, and wait for its turn to be sent to the backend. Let $\pmb{Q}_s(\tau) = (q_{s,1}(\tau), q_{s,2}(\tau),\cdots)$ denote the request queue of user $s$, in which $q_{s,i}(\tau)$ is the priority of the $i$-th request, and we have $q_{s,1}(\tau) \ge q_{s,2}(\tau)\ge \cdots$. The number of requests in the queue is denoted by $|\pmb{Q}_s(\tau)|$.
+
+A major problem facing the request scheduling on the user device is that the new rate obtained at the start of a time slot may not be able to cater to the new requests arrived later during the time slot. More specifically, at the start of time slot $\tau$, upon receiving a new rate $R_s(\tau)$, if user $s$ instantly sends the top $R_s(\tau)$ requests in the queue $\pmb{Q}_s(\tau-1)$ (given that $|\pmb{Q}_s(\tau-1)| > R_s(\tau)$), an urgent request generated later during time slot $\tau$ can no longer be sent. For example, at \formattime{00}{00}{15}, with a queue of $(2,1,1)$ and an allocated rate of $2$, the user device sends the first $2$ requests in the queue right away to the backend. At \formattime{00}{00}{25}, a new request with a priority of $3$ is generated, but has to be detained as the allocated rate is drained. 
+
+The above-mentioned problem arises as the user device can not predict future request dynamics and preserve enough rate for them. To mitigate this problem, we design a threshold-based request scheduling mechanism that works as follows. Firstly, we set a priority threshold $\theta_q$. At the beginning of time slot $\tau$, with the new rate $R_s(\tau)$, user $s$ will immediately send the requests whose priority exceeds $\theta_q$ to the backend. If the number of such requests is greater than $R_s(\tau)$, the first $R_s(\tau)$ will be sent; otherwise, the rest of the rate is reserved for later requests with high priorities. If a newly-generated request has a priority lower than $\theta_q$, it will be inserted in the queue; otherwise, it will be checked whether the allocated rate is exhausted. If yes, the request will be inserted in the queue; otherwise, it will be sent at once to the backend (note that in this case, the queue only contains requests whose priority is lower than $\theta_q$). At the end of time slot $\tau$, if the remaining rate is greater than zero, the user device will send as many queued requests as possible, before asking for a new rate.
+
+\subsubsection{Default Request Scheduling}\label{sec:default}
+
+If the user device fails to get responses from cloud servers of Clockwork, either upon logging in or during periodic rate allocation, a default request scheduling mechanism based on the Additive Increase Multiplicative Decrease (AIMD) algorithm, will come into effect. The requests will be sent to the backend at a lower rate if it is inferred that the current overall request demand is high, vice versa. There are various indications of the current request demand. For example, when using MBaaS, if the request limit is hit, further requests will be rejected with an error message of error code 155. If a user receives such an error message, she should multiplicatively decrease the rate by $b$; otherwise, she will additively increase the rate by $a$: 
+
+\begin{equation}\label{equ:default}
+R_s(\tau)= \left\{
+\begin{array}{ll}
+R_s(\tau-1)+a, &\textrm{if no error code},\\
+R_s(\tau-1)/b, &\textrm{if error code}.
+\end{array}
+\right.
+\end{equation}
+The default request scheduling will continue until the user device succeeds in getting new allocated rate from cloud servers of Clockwork.
+

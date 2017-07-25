@@ -1,0 +1,59 @@
+\documentclass[10pt, conference, letterpaper]{IEEEtran}
+
+\usepackage{epstopdf}%
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{amsfonts}
+\usepackage{stmaryrd}
+\usepackage{cite}
+\usepackage{color}
+\usepackage{multirow}
+\usepackage{graphicx,times,amsmath} % Add all your packages here
+\usepackage[center,normal]{caption}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\newtheorem{proposition}{Proposition}
+\newtheorem{corollary}{Corollary}
+\newtheorem{observation}{Observation}
+\newtheorem{result}{Result}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{definition}{Definition}
+\usepackage{enumitem}
+\usepackage{datetime}
+\usepackage{url}
+\settimeformat{hhmmsstime}
+\renewcommand{\algorithmicrequire}{ \textbf{Input:}} %Use Input in the format of Algorithm
+\renewcommand{\algorithmicensure}{ \textbf{Output:}} %Use Output in the format of Algorithm
+
+
+\begin{document}
+
+\title{Clockwork: Scheduling Cloud Requests \\in Mobile Applications}
+
+\author{\IEEEauthorblockN{Yanjiao Chen$^{\ddagger}$, Zixuan Yu$^\S$, Baochun Li$^\S$} \\
+	\IEEEauthorblockA{$^\S$State Key Lab of Software Engineering, School of Computer, Wuhan University, China\\
+		$\S$Department of Electrical and Computer Engineering, University of Toronto\\		
+		Email: $\ddagger$chenyanjiao@whu.edu.cn, $\S$\{zixuan.yu, bli\}@ece.toronto.edu}
+}
+
+\maketitle
+\input{abstract}
+\input{introduction}
+\input{background}
+\input{capacity-plan}
+\input{rate}
+\input{implementation}
+\input{experiment}
+\input{related}
+\input{conclusion}
+\input{ack}
+
+
+\bibliographystyle{IEEEtran}
+\bibliography{./main}
+
+
+\end{document}
+
+
